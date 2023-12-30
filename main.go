@@ -27,6 +27,14 @@ type Item struct {
 	UnitPrice    float64 `json:"unit_price"`
 	ItemCategory string  `json:"item_category"`
 }
+type Invoice struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	MobileNo    string `json:"mobileNo"`
+	Email       string `json:"email"`
+	Address     string `json:"address"`
+	BillingType string `json:"billingType"`
+}
 
 func init() {
 	// Initialize the database connection
@@ -256,6 +264,43 @@ func deleteItem(context *gin.Context) {
 
 	context.IndentedJSON(http.StatusNoContent, nil)
 }
+func addInvoice(context *gin.Context) {
+	var newInvoice Invoice
+	if err := context.BindJSON(&newInvoice); err != nil {
+		context.IndentedJSON(http.StatusBadRequest, gin.H{"message": "invalid JSON"})
+		return
+	}
+
+	_, err := db.Exec("INSERT INTO invoices (name, mobileNo, email, address, billingType) VALUES ($1, $2, $3, $4, $5)",
+		newInvoice.Name, newInvoice.MobileNo, newInvoice.Email, newInvoice.Address, newInvoice.BillingType)
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, gin.H{"message": "failed to insert invoice into the database"})
+		return
+	}
+
+	context.IndentedJSON(http.StatusCreated, newInvoice)
+}
+func getInvoices(context *gin.Context) {
+	rows, err := db.Query("SELECT * FROM invoices")
+	if err != nil {
+		context.IndentedJSON(http.StatusInternalServerError, gin.H{"message": "failed to retrieve invoices from the database"})
+		return
+	}
+	defer rows.Close()
+
+	var invoices []Invoice
+	for rows.Next() {
+		var invoice Invoice
+		err := rows.Scan(&invoice.ID, &invoice.Name, &invoice.MobileNo, &invoice.Email, &invoice.Address, &invoice.BillingType)
+		if err != nil {
+			context.IndentedJSON(http.StatusInternalServerError, gin.H{"message": "failed to scan rows"})
+			return
+		}
+		invoices = append(invoices, invoice)
+	}
+
+	context.IndentedJSON(http.StatusOK, invoices)
+}
 
 func main() {
 	router := gin.Default()
@@ -264,5 +309,7 @@ func main() {
 	router.POST("/items", addItems)
 	router.PUT("/items/:id", updateItem)
 	router.DELETE("/items/:id", deleteItem)
+	router.GET("/invoices", getInvoices)
+	router.POST("/invoices", addInvoice)
 	router.Run("localhost:9090")
 }
